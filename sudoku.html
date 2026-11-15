@@ -1,0 +1,2301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sudoku</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #EEF1F4;
+    --surface: #FBFCFD;
+    --panel: #E3E8ED;
+    --ink: #17212B;
+    --muted: #5B6B7B;
+    --line: #C5CDD6;
+    --line-strong: #17212B;
+    --accent: #2352D8;
+    --peer: #E6ECF3;
+    --same: #CBD9F6;
+    --sel: #AFC5F3;
+    --err: #C7352B;
+    --err-bg: #FBE0DD;
+    --ok: #1F7A4D;
+    --ok-bg: #DDF2E6;
+    --on-ink: #FFFFFF;
+    --serif: Charter, "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+
+  :root[data-theme="light"] { color-scheme: light; }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0F151B;
+      --surface: #151D25;
+      --panel: #202A34;
+      --ink: #E6EBF0;
+      --muted: #93A3B3;
+      --line: #2E3A46;
+      --line-strong: #9AA9B8;
+      --accent: #86A8FF;
+      --peer: #1B2631;
+      --same: #263A5C;
+      --sel: #31507F;
+      --err: #FF8076;
+      --err-bg: #3C2023;
+      --ok: #6FD3A0;
+      --ok-bg: #16332A;
+      --on-ink: #0F151B;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0F151B;
+    --surface: #151D25;
+    --panel: #202A34;
+    --ink: #E6EBF0;
+    --muted: #93A3B3;
+    --line: #2E3A46;
+    --line-strong: #9AA9B8;
+    --accent: #86A8FF;
+    --peer: #1B2631;
+    --same: #263A5C;
+    --sel: #31507F;
+    --err: #FF8076;
+    --err-bg: #3C2023;
+    --ok: #6FD3A0;
+    --ok-bg: #16332A;
+    --on-ink: #0F151B;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { margin: 0; }
+
+  body {
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button, select { font: inherit; color: inherit; }
+
+  :focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .app {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 16px 16px 32px;
+  }
+
+  /* Header */
+  .top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  h1 {
+    order: 0;
+    margin: 0;
+    font-family: var(--serif);
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  .levels {
+    display: inline-flex;
+    padding: 3px;
+    gap: 2px;
+    background: var(--panel);
+    border-radius: 999px;
+  }
+
+  .levels button {
+    border: 0;
+    background: transparent;
+    padding: 7px 14px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+  }
+
+  .levels button[aria-checked="true"] {
+    background: var(--ink);
+    color: var(--on-ink);
+  }
+
+  #levels { order: 2; display: flex; width: 100%; }
+  #levels button { flex: 1; }
+
+  .hbtns { order: 1; margin-left: auto; display: flex; gap: 8px; }
+
+  .ghost {
+    border: 1px solid var(--line);
+    background: transparent;
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .ghost.lg { padding: 8px 16px; font-size: 14px; font-weight: 600; background: var(--surface); }
+
+  /* Layout */
+  .stage {
+    display: grid;
+    gap: 18px;
+    justify-items: center;
+  }
+
+  .board-wrap {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .meta {
+    width: var(--size);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+    font-size: 14px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .meta .left, .meta .right { display: flex; align-items: center; gap: 14px; }
+  .meta strong { color: var(--ink); font-weight: 600; }
+  .meta .time { font-size: 18px; color: var(--ink); font-weight: 600; min-width: 3.4em; }
+
+  /* Board */
+  .board-wrap, .board { --size: min(94vw, 600px, max(300px, calc(100dvh - 200px))); }
+
+  .board {
+    --cell: calc(var(--size) / 9);
+    position: relative;
+    width: var(--size);
+    height: var(--size);
+    background: var(--surface);
+    border: 3px solid var(--line-strong);
+    border-radius: 6px;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+
+  .grid {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    grid-template-rows: repeat(9, 1fr);
+  }
+
+  .board.paused .grid { visibility: hidden; }
+
+  .cell {
+    position: relative;
+    display: block;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-right: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    border-radius: 0;
+    background: transparent;
+    cursor: pointer;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .cell[data-c="2"], .cell[data-c="5"] { border-right: 2px solid var(--line-strong); }
+  .cell[data-r="2"], .cell[data-r="5"] { border-bottom: 2px solid var(--line-strong); }
+  .cell[data-c="8"] { border-right: 0; }
+  .cell[data-r="8"] { border-bottom: 0; }
+
+  .cell:focus-visible { outline: 3px solid var(--ink); outline-offset: -3px; z-index: 3; }
+
+  .cell.peer { background: var(--peer); }
+  .cell.same { background: var(--same); }
+  .cell.sel  { background: var(--sel); box-shadow: inset 0 0 0 2px var(--accent); z-index: 1; }
+  .cell.wrong { background: var(--err-bg); box-shadow: inset 0 0 0 2px var(--err); z-index: 2; }
+
+  .val {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: calc(var(--cell) * 0.6);
+    line-height: 1;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+
+  .cell.given .val { font-family: var(--serif); font-weight: 700; color: var(--ink); }
+  .cell.entry .val { font-family: var(--sans); font-weight: 500; color: var(--accent); }
+  .cell.conflict .val {
+    color: var(--err);
+    text-decoration: underline wavy var(--err);
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 5px;
+  }
+
+  .notes {
+    position: absolute;
+    inset: 2px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    pointer-events: none;
+  }
+
+  .notes i {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-style: normal;
+    font-size: max(9px, calc(var(--cell) * 0.24));
+    line-height: 1;
+    color: var(--muted);
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+
+  .notes i.hit { color: var(--accent); font-weight: 800; }
+
+  /* Pencil mode cue: a small corner flag on the selected cell */
+  .board[data-mode="pencil"] .cell.sel::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    border-style: solid;
+    border-width: 0 calc(var(--cell) * 0.3) calc(var(--cell) * 0.3) 0;
+    border-color: transparent var(--accent) transparent transparent;
+  }
+
+  /* Veil for paused and building states */
+  .veil {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    background: var(--surface);
+    z-index: 5;
+    text-align: center;
+    padding: 20px;
+  }
+
+  .board[data-veil="on"] .veil { display: flex; }
+  .veil p { margin: 0; font-family: var(--serif); font-size: 22px; font-weight: 700; }
+  .veil .sub { font-family: var(--sans); font-size: 14px; font-weight: 400; color: var(--muted); }
+
+  .status {
+    width: var(--size);
+    min-height: 22px;
+    margin: 10px 0 0;
+    font-size: 14px;
+    color: var(--muted);
+  }
+
+  /* Solved sweep */
+  @keyframes lift {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.28); }
+    100% { transform: scale(1); }
+  }
+
+  .board.solved .cell .val {
+    animation: lift 0.5s ease both;
+    animation-delay: calc((var(--r) + var(--c)) * 35ms);
+  }
+
+  /* Side panel */
+  .side {
+    width: min(94vw, 600px);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .tools {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 6px;
+  }
+
+  .tool {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 8px 2px 7px;
+    min-height: 56px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: 10px;
+    font-size: 11.5px;
+    line-height: 1.15;
+    text-align: center;
+    cursor: pointer;
+  }
+
+  .tool svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .tool[aria-pressed="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-ink);
+  }
+
+  .tool:disabled { opacity: 0.4; cursor: default; }
+
+  .pad {
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    gap: 5px;
+  }
+
+  .padbtn {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 3 / 4;
+    min-height: 52px;
+    padding: 0;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: 10px;
+    cursor: pointer;
+  }
+
+  .padbtn .d {
+    font-family: var(--sans);
+    font-size: 24px;
+    font-weight: 500;
+    color: var(--accent);
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+
+  .padbtn .left {
+    position: absolute;
+    right: 6px;
+    bottom: 4px;
+    font-size: 10px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .padbtn.done { opacity: 0.38; }
+  .pad[data-counts="off"] .padbtn .left { display: none; }
+  .pad[data-counts="off"] .padbtn.done { opacity: 1; }
+
+  .padbtn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .padbtn.active .d { color: var(--on-ink); }
+  .padbtn.active .left { color: var(--on-ink); }
+
+  .pad[data-mode="pencil"] .padbtn { border-style: dashed; border-color: var(--accent); }
+  .pad[data-mode="pencil"] .padbtn .d { font-size: 17px; color: var(--muted); }
+  .pad[data-mode="pencil"] .padbtn.active .d { color: var(--on-ink); }
+
+  .actions { display: flex; gap: 8px; }
+
+  .btn {
+    flex: 1 1 auto;
+    padding: 12px 16px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .btn.primary {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: var(--on-ink);
+  }
+
+  /* Simple dialogs (win, game over, confirm) */
+  .modal {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(10, 16, 22, 0.55);
+  }
+
+  .dialog {
+    width: min(100%, 400px);
+    padding: 24px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  }
+
+  .dialog h2 { margin: 0 0 8px; font-family: var(--serif); font-size: 24px; }
+  .dialog p { margin: 0 0 20px; color: var(--muted); line-height: 1.5; }
+  .dlg-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  /* Sheets (settings and guide) */
+  dialog.sheetdlg {
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface);
+    color: var(--ink);
+    width: min(94vw, 460px);
+    max-width: none;
+    max-height: min(90dvh, 820px);
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  }
+
+  dialog.sheetdlg[open] { display: flex; flex-direction: column; }
+  dialog.sheetdlg::backdrop { background: rgba(10, 16, 22, 0.55); }
+
+  #guide { width: min(96vw, 780px); height: min(92dvh, 920px); }
+
+  .sheet { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+
+  .sheet-h {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .sheet-h h2 { margin: 0; font-family: var(--serif); font-size: 22px; }
+
+  .sheet-b { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 20px 24px; }
+
+  .grp { padding-top: 18px; }
+  .grp h3 { margin: 0 0 4px; font-size: 15px; font-weight: 700; }
+
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 14.5px;
+    cursor: pointer;
+  }
+
+  .row:last-child { border-bottom: 0; }
+  .row .txt { display: flex; flex-direction: column; gap: 2px; }
+  .row small { font-size: 12.5px; color: var(--muted); line-height: 1.35; }
+  .row input[type="checkbox"] { width: 20px; height: 20px; flex: none; accent-color: var(--accent); margin: 0; }
+
+  .row select {
+    flex: none;
+    padding: 7px 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    cursor: pointer;
+  }
+
+  .row.static { cursor: default; }
+  .row .levels button { padding: 6px 12px; font-size: 13px; }
+
+  /* Guide */
+  .intro { margin: 16px 0 0; line-height: 1.55; color: var(--muted); font-size: 14.5px; }
+  .intro strong { color: var(--ink); }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    margin: 14px 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .legend .sw {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-right: 6px;
+    vertical-align: -2px;
+    border-radius: 3px;
+  }
+
+  .toc { display: flex; flex-wrap: wrap; gap: 6px; margin: 16px 0 0; }
+  .toc button {
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: 999px;
+    padding: 5px 11px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .tech { padding: 22px 0 8px; margin-top: 22px; border-top: 1px solid var(--line); }
+  .tech header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; margin-bottom: 8px; }
+  .tech h3 { margin: 0; font-family: var(--serif); font-size: 21px; }
+
+  .tag {
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 2px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--muted);
+  }
+
+  .tech p { margin: 8px 0; line-height: 1.55; font-size: 14.5px; max-width: 62ch; }
+  .tech p.when { color: var(--ink); }
+  .tech ol { margin: 8px 0; padding-left: 22px; line-height: 1.55; font-size: 14.5px; max-width: 62ch; }
+  .tech li { margin: 3px 0; }
+  .tech p.tip { color: var(--muted); }
+
+  .fig { margin: 14px 0 6px; }
+  .cap { margin: 6px 0 0; max-width: 62ch; font-size: 13px; line-height: 1.5; color: var(--muted); }
+
+  .dg {
+    --cols: 9;
+    container-type: inline-size;
+    display: grid;
+    width: min(100%, 360px);
+    border: 2px solid var(--line-strong);
+    border-radius: 4px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  .dc {
+    position: relative;
+    aspect-ratio: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-right: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .dc.br { border-right: 2px solid var(--line-strong); }
+  .dc.bb { border-bottom: 2px solid var(--line-strong); }
+  .dc.lc { border-right: 0; }
+  .dc.lr { border-bottom: 0; }
+
+  .dc.ln { background: var(--peer); }
+  .dc.a  { background: var(--same); box-shadow: inset 0 0 0 2px var(--accent); }
+  .dc.b  { background: var(--panel); box-shadow: inset 0 0 0 2px var(--muted); }
+  .dc.e  { background: var(--err-bg); }
+  .dc.g  { background: var(--ok-bg); box-shadow: inset 0 0 0 2px var(--ok); }
+
+  .dt {
+    font-family: var(--serif);
+    font-weight: 700;
+    font-size: calc(100cqw / var(--cols) * 0.56);
+    line-height: 1;
+    color: var(--ink);
+    font-variant-numeric: lining-nums;
+  }
+
+  .dt.mk { font-family: var(--sans); font-weight: 600; font-size: calc(100cqw / var(--cols) * 0.5); color: var(--accent); }
+  .dt.sx { color: var(--err); text-decoration: line-through; text-decoration-thickness: 2px; }
+  .dc.g .dt { color: var(--ok); }
+
+  .dn {
+    position: absolute;
+    inset: 7%;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+  }
+
+  .dn i {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-style: normal;
+    font-size: calc(100cqw / var(--cols) * 0.27);
+    line-height: 1;
+    color: var(--muted);
+  }
+
+  .dn i.h { color: var(--accent); font-weight: 800; }
+  .dn i.x { color: var(--err); font-weight: 700; text-decoration: line-through; text-decoration-thickness: 1.5px; }
+
+
+  /* Play together */
+  .hint { margin: 6px 0 10px; font-size: 13.5px; line-height: 1.45; color: var(--muted); }
+  .hint.err { color: var(--err); }
+  .hint.ok { color: var(--ok); }
+
+  .codebox {
+    margin: 12px 0 8px;
+    padding: 18px 12px;
+    text-align: center;
+    font-family: var(--serif);
+    font-weight: 700;
+    font-size: clamp(28px, 8vw, 40px);
+    letter-spacing: 0.08em;
+    font-variant-numeric: lining-nums tabular-nums;
+    background: var(--panel);
+    border-radius: 12px;
+    user-select: all;
+  }
+
+  .codelist { margin: 8px 0 12px; padding-left: 20px; font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+  .codelist:empty { display: none; }
+
+  .field { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; font-size: 14px; }
+  .field input {
+    font: inherit;
+    font-size: 22px;
+    letter-spacing: 0.08em;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .actions.wrap { flex-wrap: wrap; }
+  .btn:disabled { opacity: 0.45; cursor: default; }
+
+  /* Desktop layout */
+  @media (min-width: 900px) {
+    .app { padding: 28px 24px 40px; }
+    h1 { font-size: 34px; }
+
+    #levels { order: 1; display: inline-flex; width: auto; margin-left: 12px; }
+    #levels button { flex: none; }
+    .hbtns { order: 2; }
+
+    .board-wrap, .board { --size: min(600px, max(360px, calc(100dvh - 170px))); }
+
+    .stage {
+      grid-template-columns: auto 320px;
+      justify-content: center;
+      align-items: start;
+      gap: 36px;
+    }
+
+    .side { width: 320px; }
+
+    .pad { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .padbtn { aspect-ratio: 5 / 4; min-height: 0; }
+    .padbtn .d { font-size: 30px; }
+    .pad[data-mode="pencil"] .padbtn .d { font-size: 20px; }
+    .padbtn .left { font-size: 11px; right: 9px; bottom: 6px; }
+
+    .tools { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .tool { flex-direction: row; justify-content: flex-start; gap: 10px; padding: 11px 14px; min-height: 0; font-size: 14px; }
+  }
+
+  @media (max-width: 480px) {
+    .ghost.lg { padding: 8px 12px; font-size: 13px; }
+  }
+
+  @media (max-width: 640px) {
+    #guide {
+      width: 100vw;
+      height: 100dvh;
+      max-height: 100dvh;
+      border-radius: 0;
+      border: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .board.solved .cell .val { animation: none; }
+  }
+</style>
+</head>
+<body>
+<main class="app">
+  <header class="top">
+    <h1>Sudoku</h1>
+    <div class="levels" role="radiogroup" aria-label="Difficulty" id="levels">
+      <button type="button" role="radio" aria-checked="true" data-level="easy">Easy</button>
+      <button type="button" role="radio" aria-checked="false" data-level="medium">Medium</button>
+      <button type="button" role="radio" aria-checked="false" data-level="hard">Hard</button>
+      <button type="button" role="radio" aria-checked="false" data-level="expert">Expert</button>
+    </div>
+    <div class="hbtns">
+      <button type="button" class="ghost lg" id="togetherBtn">Play together</button>
+      <button type="button" class="ghost lg" id="guideBtn">Guide</button>
+      <button type="button" class="ghost lg" id="settingsBtn">Settings</button>
+    </div>
+  </header>
+
+  <section class="stage">
+    <div class="board-wrap">
+      <div class="meta">
+        <div class="left">
+          <span class="time" id="time">00:00</span>
+          <span>Mistakes <strong id="mistakes">0</strong></span>
+          <span>Hints <strong id="hints">0</strong></span>
+        </div>
+        <div class="right">
+          <button type="button" class="ghost" id="pause">Pause</button>
+        </div>
+      </div>
+
+      <div class="board" id="board" data-mode="pen" data-veil="on">
+        <div class="grid" id="grid" role="group" aria-label="Sudoku board"></div>
+        <div class="veil" id="veil">
+          <p id="veilTitle">Building your puzzle</p>
+          <span class="sub" id="veilSub"></span>
+          <button type="button" class="btn primary" id="resume" hidden style="flex:none">Resume</button>
+        </div>
+      </div>
+
+      <p class="status" id="status" aria-live="polite"></p>
+    </div>
+
+    <aside class="side">
+      <div class="tools" id="tools">
+        <button type="button" class="tool" id="undo">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>
+          <span>Undo</span>
+        </button>
+        <button type="button" class="tool" id="redo">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg>
+          <span>Redo</span>
+        </button>
+        <button type="button" class="tool" id="erase">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>
+          <span>Erase</span>
+        </button>
+        <button type="button" class="tool" id="pencil" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+          <span>Pencil</span>
+        </button>
+        <button type="button" class="tool" id="hint">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
+          <span>Hint</span>
+        </button>
+        <button type="button" class="tool" id="autofill">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg>
+          <span>Fill marks</span>
+        </button>
+      </div>
+
+      <div class="pad" id="pad" data-mode="pen" data-counts="on" role="group" aria-label="Number pad"></div>
+
+      <div class="actions">
+        <button type="button" class="btn" id="check">Check</button>
+        <button type="button" class="btn primary" id="newGame">New game</button>
+      </div>
+    </aside>
+  </section>
+</main>
+
+<dialog class="sheetdlg" id="settings" aria-labelledby="settingsTitle">
+  <div class="sheet">
+    <div class="sheet-h">
+      <h2 id="settingsTitle">Settings</h2>
+      <button type="button" class="ghost lg" data-close>Done</button>
+    </div>
+    <div class="sheet-b">
+      <section class="grp">
+        <h3>Challenge</h3>
+        <label class="row">
+          <span class="txt">Game over after<small>Ends the puzzle once you place this many wrong numbers.</small></span>
+          <select id="optLimit">
+            <option value="0">Never</option>
+            <option value="1">1 wrong number</option>
+            <option value="3">3 wrong numbers</option>
+            <option value="5">5 wrong numbers</option>
+          </select>
+        </label>
+        <label class="row">
+          <span class="txt">Show how many of each number remain<small>Turn off to count the digits yourself.</small></span>
+          <input type="checkbox" id="optCounts" checked>
+        </label>
+      </section>
+
+      <section class="grp">
+        <h3>Highlighting</h3>
+        <label class="row">
+          <span class="txt">Highlight row, column, and box</span>
+          <input type="checkbox" id="optPeers" checked>
+        </label>
+        <label class="row">
+          <span class="txt">Highlight matching numbers</span>
+          <input type="checkbox" id="optMatches" checked>
+        </label>
+        <label class="row">
+          <span class="txt">Highlight conflicts<small>Underlines numbers that repeat in a row, column, or box.</small></span>
+          <input type="checkbox" id="optConflicts" checked>
+        </label>
+      </section>
+
+      <section class="grp">
+        <h3>Entry</h3>
+        <label class="row">
+          <span class="txt">Number-first entry<small>Pick a number on the pad, then tap any cell to fill it. Tap the number again to deselect.</small></span>
+          <input type="checkbox" id="optStamp">
+        </label>
+        <label class="row">
+          <span class="txt">Remove matching pencil marks automatically</span>
+          <input type="checkbox" id="optAuto" checked>
+        </label>
+      </section>
+
+      <section class="grp">
+        <h3>Appearance</h3>
+        <div class="row static">
+          <span class="txt" id="themeLabel">Theme</span>
+          <div class="levels" id="themes" role="radiogroup" aria-labelledby="themeLabel">
+            <button type="button" role="radio" aria-checked="true" data-theme="system">System</button>
+            <button type="button" role="radio" aria-checked="false" data-theme="light">Light</button>
+            <button type="button" role="radio" aria-checked="false" data-theme="dark">Dark</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</dialog>
+
+<dialog class="sheetdlg" id="together" aria-labelledby="togetherTitle">
+  <div class="sheet">
+    <div class="sheet-h">
+      <h2 id="togetherTitle">Play together</h2>
+      <button type="button" class="ghost lg" data-close>Done</button>
+    </div>
+    <div class="sheet-b">
+      <section class="grp">
+        <h3>Share this puzzle</h3>
+        <p class="hint">Read this code aloud. Everyone who enters it gets the same puzzle and the same game settings. Theme and number-first entry stay personal.</p>
+        <div class="codebox" id="myCode" aria-label="Puzzle code">000 000 0000</div>
+        <ul class="codelist" id="myCodeInfo"></ul>
+        <div class="actions wrap">
+          <button type="button" class="btn" id="copyCode">Copy code</button>
+          <button type="button" class="btn" id="readyRestart">Restart and wait for players</button>
+        </div>
+        <p class="hint" id="copyMsg" aria-live="polite"></p>
+      </section>
+
+      <section class="grp">
+        <h3>Join a puzzle</h3>
+        <label class="field">
+          <span>Enter the 10-digit code you heard</span>
+          <input type="text" id="joinCode" inputmode="numeric" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="000 000 0000">
+        </label>
+        <p class="hint" id="joinMsg" aria-live="polite">Spaces and dashes are fine.</p>
+        <ul class="codelist" id="joinInfo"></ul>
+        <button type="button" class="btn primary" id="joinBtn" disabled style="width:100%">Start puzzle</button>
+        <p class="hint">Joining starts on a ready screen. Everyone taps Start together.</p>
+      </section>
+    </div>
+  </div>
+</dialog>
+
+<dialog class="sheetdlg" id="guide" aria-labelledby="guideTitle">
+  <div class="sheet">
+    <div class="sheet-h">
+      <h2 id="guideTitle">Sudoku guide</h2>
+      <button type="button" class="ghost lg" data-close>Close</button>
+    </div>
+    <div class="sheet-b" id="guideBody"></div>
+  </div>
+</dialog>
+
+<script>
+(() => {
+  'use strict';
+
+  const $ = (s) => document.querySelector(s);
+
+  /* ---------- Geometry ---------- */
+  const ROW = (i) => (i / 9) | 0;
+  const COL = (i) => i % 9;
+  const BOX = (i) => (((ROW(i) / 3) | 0) * 3) + ((COL(i) / 3) | 0);
+
+  const UNITS = [];
+  for (let r = 0; r < 9; r++) UNITS.push(Array.from({ length: 9 }, (_, c) => r * 9 + c));
+  for (let c = 0; c < 9; c++) UNITS.push(Array.from({ length: 9 }, (_, r) => r * 9 + c));
+  for (let b = 0; b < 9; b++) {
+    const br = ((b / 3) | 0) * 3, bc = (b % 3) * 3, u = [];
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) u.push((br + r) * 9 + bc + c);
+    UNITS.push(u);
+  }
+
+  const PEERS = Array.from({ length: 81 }, (_, i) => {
+    const s = new Set();
+    for (const u of UNITS) if (u.includes(i)) for (const j of u) if (j !== i) s.add(j);
+    return [...s];
+  });
+  const PEER_SET = PEERS.map((a) => new Set(a));
+
+  const ALL = 0x3FE; // bits 1 to 9
+  const popcount = (m) => { let n = 0; while (m) { m &= m - 1; n++; } return n; };
+  // Seedable random numbers (mulberry32) so a code can rebuild the same puzzle on any device.
+  let rng = Math.random;
+  function seeded(seed) {
+    let a = seed >>> 0;
+    return () => {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const rand = (n) => Math.floor(rng() * n);
+  const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = rand(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+  /* ---------- Solver and generator ---------- */
+  function masksOf(g) {
+    const rows = new Array(9).fill(0), cols = new Array(9).fill(0), boxes = new Array(9).fill(0);
+    for (let i = 0; i < 81; i++) {
+      if (g[i]) { const b = 1 << g[i]; rows[ROW(i)] |= b; cols[COL(i)] |= b; boxes[BOX(i)] |= b; }
+    }
+    return { rows, cols, boxes };
+  }
+
+  function search(g, limit, randomize) {
+    const { rows, cols, boxes } = masksOf(g);
+    let count = 0, first = null;
+    (function rec() {
+      let best = -1, bestMask = 0, bestN = 10;
+      for (let i = 0; i < 81; i++) {
+        if (g[i]) continue;
+        const m = ALL & ~(rows[ROW(i)] | cols[COL(i)] | boxes[BOX(i)]);
+        const n = popcount(m);
+        if (n < bestN) { best = i; bestMask = m; bestN = n; if (n < 2) break; }
+      }
+      if (best < 0) { count++; if (!first) first = g.slice(); return count >= limit; }
+      if (bestN === 0) return false;
+      const r = ROW(best), c = COL(best), b = BOX(best);
+      const vals = [];
+      for (let v = 1; v <= 9; v++) if (bestMask & (1 << v)) vals.push(v);
+      if (randomize) shuffle(vals);
+      for (const v of vals) {
+        const bit = 1 << v;
+        g[best] = v; rows[r] |= bit; cols[c] |= bit; boxes[b] |= bit;
+        const stop = rec();
+        g[best] = 0; rows[r] &= ~bit; cols[c] &= ~bit; boxes[b] &= ~bit;
+        if (stop) return true;
+      }
+      return false;
+    })();
+    return { count, first };
+  }
+
+  const generateSolution = () => search(new Array(81).fill(0), 1, true).first;
+  const countSolutions = (grid) => search(grid.slice(), 2, false).count;
+
+  // Can the puzzle be finished with naked singles only (or naked plus hidden singles)?
+  function solvableBySingles(grid, hidden) {
+    const g = grid.slice();
+    const { rows, cols, boxes } = masksOf(g);
+    const cand = new Array(81).fill(0);
+    for (let i = 0; i < 81; i++) if (!g[i]) cand[i] = ALL & ~(rows[ROW(i)] | cols[COL(i)] | boxes[BOX(i)]);
+    let left = g.filter((v) => !v).length;
+    const place = (i, v) => {
+      g[i] = v; cand[i] = 0; left--;
+      const bit = 1 << v;
+      for (const p of PEERS[i]) cand[p] &= ~bit;
+    };
+    let progress = true;
+    while (left && progress) {
+      progress = false;
+      for (let i = 0; i < 81; i++) {
+        if (!g[i] && popcount(cand[i]) === 1) { place(i, 31 - Math.clz32(cand[i])); progress = true; }
+      }
+      if (!progress && hidden) {
+        outer: for (const u of UNITS) {
+          for (let v = 1; v <= 9; v++) {
+            let spot = -1, n = 0, has = false;
+            for (const i of u) {
+              if (g[i] === v) { has = true; break; }
+              if (!g[i] && ((cand[i] >> v) & 1)) { n++; spot = i; }
+            }
+            if (!has && n === 1) { place(spot, v); progress = true; break outer; }
+          }
+        }
+      }
+    }
+    return left === 0;
+  }
+
+  const LEVELS = {
+    easy:   { label: 'Easy',   clues: [40, 45] },
+    medium: { label: 'Medium', clues: [32, 36] },
+    hard:   { label: 'Hard',   clues: [27, 30] },
+    expert: { label: 'Expert', clues: [22, 26] }
+  };
+
+  function gradeOK(level, p) {
+    const naked = solvableBySingles(p, false);
+    const singles = solvableBySingles(p, true);
+    if (level === 'easy') return naked;
+    if (level === 'medium') return singles && !naked;
+    return !singles;
+  }
+
+  function carve(level) {
+    const [lo, hi] = LEVELS[level].clues;
+    const target = lo + rand(hi - lo + 1);
+    const solution = generateSolution();
+    const p = solution.slice();
+    let clues = 81;
+    for (const i of shuffle([...Array(81).keys()])) {
+      if (clues <= target) break;
+      const keep = p[i];
+      p[i] = 0;
+      let ok = countSolutions(p) === 1;
+      if (ok && level === 'easy') ok = solvableBySingles(p, false);
+      if (ok && level === 'medium') ok = solvableBySingles(p, true);
+      if (ok) clues--; else p[i] = keep;
+    }
+    return { puzzle: p, solution };
+  }
+
+  function makePuzzle(level, seed) {
+    rng = seeded(seed);
+    let result = null;
+    for (let t = 0; t < 25; t++) {
+      result = carve(level);
+      if (gradeOK(level, result.puzzle)) break;
+    }
+    rng = Math.random;
+    return result;
+  }
+
+  /* ---------- State ---------- */
+  const blank = (level) => ({
+    level,
+    seed: 0,
+    ready: false,
+    grid: new Array(81).fill(0),
+    given: new Array(81).fill(false),
+    solution: new Array(81).fill(0),
+    notes: new Array(81).fill(0),
+    sel: -1,
+    stamp: 0,
+    pencil: false,
+    history: [],
+    future: [],
+    mistakes: 0,
+    hints: 0,
+    seconds: 0,
+    paused: false,
+    over: false,
+    lost: false,
+    busy: true,
+    wrong: new Set()
+  });
+
+  let S = blank('easy');
+  let timerId = null;
+  let modalEl = null;
+  let modalOnEscape = null;
+
+  /* ---------- Elements ---------- */
+  const board = $('#board'), gridEl = $('#grid'), statusEl = $('#status');
+  const cells = [], vals = [], noteEls = [];
+  for (let i = 0; i < 81; i++) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'cell';
+    b.dataset.i = i;
+    b.dataset.r = ROW(i);
+    b.dataset.c = COL(i);
+    b.style.setProperty('--r', ROW(i));
+    b.style.setProperty('--c', COL(i));
+    b.tabIndex = -1;
+    b.innerHTML = '<span class="val"></span><span class="notes">' + '<i></i>'.repeat(9) + '</span>';
+    gridEl.appendChild(b);
+    cells.push(b);
+    vals.push(b.querySelector('.val'));
+    noteEls.push([...b.querySelectorAll('.notes i')]);
+  }
+
+  const padEl = $('#pad');
+  const padBtns = [], padLeft = [];
+  for (let v = 1; v <= 9; v++) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'padbtn';
+    b.dataset.v = v;
+    b.innerHTML = '<span class="d">' + v + '</span><span class="left"></span>';
+    padEl.appendChild(b);
+    padBtns.push(b);
+    padLeft.push(b.querySelector('.left'));
+  }
+
+  /* ---------- Helpers ---------- */
+  const pad2 = (n) => String(n).padStart(2, '0');
+  function fmt(s) {
+    const h = (s / 3600) | 0, m = ((s % 3600) / 60) | 0, sec = s % 60;
+    return h ? h + ':' + pad2(m) + ':' + pad2(sec) : pad2(m) + ':' + pad2(sec);
+  }
+  const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
+  const setStatus = (t) => { statusEl.textContent = t; };
+  const stampMode = () => $('#optStamp').checked;
+  const mistakeLimit = () => +$('#optLimit').value;
+  const dialogOpen = () => !!document.querySelector('dialog[open]');
+
+  function computeConflicts() {
+    const set = new Set();
+    for (let i = 0; i < 81; i++) {
+      const v = S.grid[i];
+      if (!v) continue;
+      for (const p of PEERS[i]) if (S.grid[p] === v) { set.add(i); set.add(p); }
+    }
+    return set;
+  }
+
+  /* ---------- Share codes ---------- */
+  // A code is 9 digits of packed data plus 1 Damm check digit. The check digit catches
+  // any single wrong digit and any two neighboring digits that were swapped.
+  const DAMM = [
+    [0, 3, 1, 7, 5, 9, 8, 6, 4, 2],
+    [7, 0, 9, 2, 1, 5, 4, 8, 6, 3],
+    [4, 2, 0, 6, 8, 7, 1, 3, 5, 9],
+    [1, 7, 5, 0, 9, 8, 3, 4, 2, 6],
+    [6, 1, 2, 3, 0, 4, 5, 9, 7, 8],
+    [3, 6, 7, 4, 2, 0, 9, 5, 8, 1],
+    [5, 8, 6, 9, 7, 2, 0, 1, 3, 4],
+    [8, 9, 4, 5, 3, 6, 2, 0, 1, 7],
+    [9, 4, 3, 8, 6, 1, 7, 2, 0, 5],
+    [2, 5, 8, 1, 4, 3, 6, 7, 9, 0]
+  ];
+  const dammSum = (digits) => { let i = 0; for (const ch of digits) i = DAMM[i][+ch]; return i; };
+
+  const LEVEL_IDS = ['easy', 'medium', 'hard', 'expert'];
+  const LIMITS = [0, 1, 3, 5];
+  const SEED_RANGE = 2 ** 20;
+
+  const randomSeed = () => Math.floor(Math.random() * SEED_RANGE);
+
+  function encodeCode(seed, level, st) {
+    const flags = (st.counts ? 1 : 0) | (st.peers ? 2 : 0) | (st.matches ? 4 : 0) | (st.conflicts ? 8 : 0) | (st.auto ? 16 : 0);
+    const limitIdx = Math.max(0, LIMITS.indexOf(st.limit));
+    const value = seed + LEVEL_IDS.indexOf(level) * 2 ** 20 + limitIdx * 2 ** 22 + flags * 2 ** 24;
+    const body = String(value).padStart(9, '0');
+    return body + dammSum(body);
+  }
+
+  function decodeCode(raw) {
+    const digits = String(raw).replace(/\D/g, '');
+    if (digits.length !== 10 || dammSum(digits) !== 0) return null;
+    const value = +digits.slice(0, 9);
+    if (value >= 2 ** 29) return null;
+    const flags = Math.floor(value / 2 ** 24);
+    return {
+      seed: value % SEED_RANGE,
+      level: LEVEL_IDS[Math.floor(value / 2 ** 20) % 4],
+      settings: {
+        limit: LIMITS[Math.floor(value / 2 ** 22) % 4],
+        counts: !!(flags & 1),
+        peers: !!(flags & 2),
+        matches: !!(flags & 4),
+        conflicts: !!(flags & 8),
+        auto: !!(flags & 16)
+      }
+    };
+  }
+
+  const groupCode = (c) => c.slice(0, 3) + ' ' + c.slice(3, 6) + ' ' + c.slice(6);
+
+  function readSettings() {
+    return {
+      limit: mistakeLimit(),
+      counts: $('#optCounts').checked,
+      peers: $('#optPeers').checked,
+      matches: $('#optMatches').checked,
+      conflicts: $('#optConflicts').checked,
+      auto: $('#optAuto').checked
+    };
+  }
+
+  function applySettings(st) {
+    $('#optLimit').value = String(st.limit);
+    $('#optCounts').checked = st.counts;
+    $('#optPeers').checked = st.peers;
+    $('#optMatches').checked = st.matches;
+    $('#optConflicts').checked = st.conflicts;
+    $('#optAuto').checked = st.auto;
+  }
+
+  function describeSettings(level, st) {
+    const hl = [];
+    if (st.peers) hl.push('row, column, and box');
+    if (st.matches) hl.push('matching numbers');
+    if (st.conflicts) hl.push('conflicts');
+    return [
+      LEVELS[level].label + ' puzzle',
+      st.limit ? 'Game over after ' + plural(st.limit, 'wrong number', 'wrong numbers') : 'No game over',
+      st.counts ? 'Remaining counts shown' : 'Remaining counts hidden',
+      hl.length ? 'Highlighting: ' + hl.join(', ') : 'No highlighting',
+      st.auto ? 'Pencil marks clear automatically' : 'Pencil marks stay until erased'
+    ];
+  }
+
+  /* ---------- Render ---------- */
+  function render() {
+    const showConflicts = $('#optConflicts').checked;
+    const showPeers = $('#optPeers').checked;
+    const showMatches = $('#optMatches').checked;
+    const showCounts = $('#optCounts').checked;
+    const stampOn = stampMode();
+    const conflicts = showConflicts ? computeConflicts() : new Set();
+    const selVal = S.sel >= 0 ? S.grid[S.sel] : 0;
+    const hlVal = showMatches ? (stampOn && S.stamp ? S.stamp : selVal) : 0;
+    const peers = S.sel >= 0 && showPeers ? PEER_SET[S.sel] : null;
+    const tabTarget = S.sel >= 0 ? S.sel : 0;
+
+    for (let i = 0; i < 81; i++) {
+      const el = cells[i], v = S.grid[i];
+      el.classList.toggle('given', S.given[i]);
+      el.classList.toggle('entry', !S.given[i] && v !== 0);
+      el.classList.toggle('sel', i === S.sel);
+      el.classList.toggle('peer', !!peers && peers.has(i));
+      el.classList.toggle('same', hlVal !== 0 && v === hlVal && i !== S.sel);
+      el.classList.toggle('conflict', conflicts.has(i) && !S.given[i]);
+      el.classList.toggle('wrong', S.wrong.has(i));
+      el.tabIndex = i === tabTarget ? 0 : -1;
+      vals[i].textContent = v || '';
+
+      const mask = v ? 0 : S.notes[i];
+      const list = [];
+      for (let k = 1; k <= 9; k++) {
+        const on = (mask >> k) & 1;
+        const n = noteEls[i][k - 1];
+        n.textContent = on ? k : '';
+        n.classList.toggle('hit', !!on && hlVal === k);
+        if (on) list.push(k);
+      }
+
+      let label = 'Row ' + (ROW(i) + 1) + ', column ' + (COL(i) + 1) + ', ';
+      if (v) label += (S.given[i] ? 'given ' : '') + v;
+      else label += list.length ? 'empty, pencil marks ' + list.join(' ') : 'empty';
+      el.setAttribute('aria-label', label);
+    }
+
+    // Number pad
+    const counts = new Array(10).fill(0);
+    for (let i = 0; i < 81; i++) if (S.grid[i]) counts[S.grid[i]]++;
+    padEl.dataset.counts = showCounts ? 'on' : 'off';
+    for (let v = 1; v <= 9; v++) {
+      const left = Math.max(0, 9 - counts[v]);
+      padLeft[v - 1].textContent = left;
+      padBtns[v - 1].classList.toggle('done', left === 0);
+      padBtns[v - 1].classList.toggle('active', stampOn && S.stamp === v);
+      if (stampOn) padBtns[v - 1].setAttribute('aria-pressed', String(S.stamp === v));
+      else padBtns[v - 1].removeAttribute('aria-pressed');
+      padBtns[v - 1].setAttribute('aria-label', showCounts ? v + ', ' + left + ' left' : String(v));
+    }
+
+    const mode = S.pencil ? 'pencil' : 'pen';
+    board.dataset.mode = mode;
+    padEl.dataset.mode = mode;
+    $('#pencil').setAttribute('aria-pressed', String(S.pencil));
+    $('#undo').disabled = S.history.length === 0 || S.over;
+    $('#redo').disabled = S.future.length === 0 || S.over;
+    renderMeta();
+  }
+
+  function renderMeta() {
+    const lim = mistakeLimit();
+    $('#time').textContent = fmt(S.seconds);
+    $('#mistakes').textContent = lim ? S.mistakes + '/' + lim : S.mistakes;
+    $('#hints').textContent = S.hints;
+    $('#pause').textContent = S.ready ? 'Start' : (S.paused ? 'Resume' : 'Pause');
+    $('#pause').disabled = S.over || S.busy;
+  }
+
+  function renderLevels() {
+    document.querySelectorAll('#levels button').forEach((b) => {
+      b.setAttribute('aria-checked', String(b.dataset.level === S.level));
+    });
+  }
+
+  /* ---------- History ---------- */
+  const snapshot = () => ({ grid: S.grid.slice(), notes: S.notes.slice() });
+  function pushHistory() {
+    S.history.push(snapshot());
+    if (S.history.length > 500) S.history.shift();
+    S.future = [];
+  }
+  function restore(snap) { S.grid = snap.grid; S.notes = snap.notes; S.wrong.clear(); }
+
+  function undo() {
+    if (S.over || S.busy || S.paused || !S.history.length) return;
+    S.future.push(snapshot());
+    restore(S.history.pop());
+    render();
+  }
+  function redo() {
+    if (S.over || S.busy || S.paused || !S.future.length) return;
+    S.history.push(snapshot());
+    restore(S.future.pop());
+    render();
+  }
+
+  /* ---------- Actions ---------- */
+  const canEdit = () => !S.busy && !S.paused && !S.over && S.sel >= 0 && !S.given[S.sel];
+
+  function select(i) {
+    if (S.busy || S.paused) return;
+    S.sel = i;
+    render();
+  }
+
+  // Number-first entry: tapping a cell places the active number.
+  function cellClick(i) {
+    if (S.busy || S.paused) return;
+    S.sel = i;
+    if (stampMode() && S.stamp && !S.over && !S.given[i]) { enter(S.stamp, false); return; }
+    render();
+  }
+
+  function pickNumber(v) {
+    if (S.busy || S.paused || S.over) return;
+    S.stamp = S.stamp === v ? 0 : v;
+    if (!S.stamp) setStatus('Number deselected.');
+    else if (S.pencil) setStatus('Tap cells to add or remove pencil marks for ' + v + '.');
+    else setStatus('Tap cells to place ' + v + '. Tap ' + v + ' again to deselect.');
+    render();
+  }
+
+  function clearPeerNotes(i, v) {
+    if (!$('#optAuto').checked) return;
+    const bit = ~(1 << v);
+    for (const p of PEERS[i]) S.notes[p] &= bit;
+  }
+
+  function enter(v, tempPencil) {
+    if (S.busy || S.paused || S.over) return;
+    if (S.sel < 0) { setStatus('Select a cell first.'); return; }
+    if (S.given[S.sel]) { setStatus('That number is part of the puzzle.'); return; }
+    const pencil = S.pencil !== !!tempPencil;
+    const i = S.sel;
+
+    if (pencil) {
+      if (S.grid[i]) { setStatus('Erase the number first to add pencil marks.'); return; }
+      pushHistory();
+      S.notes[i] ^= (1 << v);
+      S.wrong.clear();
+      render();
+      return;
+    }
+
+    if (S.grid[i] === v) { erase(); return; }
+    pushHistory();
+    S.grid[i] = v;
+    S.notes[i] = 0;
+    clearPeerNotes(i, v);
+    S.wrong.clear();
+
+    if (v !== S.solution[i]) {
+      S.mistakes++;
+      const lim = mistakeLimit();
+      if (lim && S.mistakes >= lim) {
+        S.wrong.add(i);
+        render();
+        gameOver();
+        return;
+      }
+    }
+    render();
+    checkWin();
+  }
+
+  function erase() {
+    if (!canEdit()) return;
+    const i = S.sel;
+    if (!S.grid[i] && !S.notes[i]) return;
+    pushHistory();
+    S.grid[i] = 0;
+    S.notes[i] = 0;
+    S.wrong.clear();
+    render();
+  }
+
+  function togglePencil() {
+    S.pencil = !S.pencil;
+    setStatus(S.pencil ? 'Pencil mode on. Numbers become small marks.' : 'Pen mode on.');
+    render();
+  }
+
+  function hint() {
+    if (S.busy || S.paused || S.over) return;
+    let t = -1;
+    if (S.sel >= 0 && !S.given[S.sel] && S.grid[S.sel] !== S.solution[S.sel]) t = S.sel;
+    else {
+      const open = [];
+      for (let i = 0; i < 81; i++) if (!S.given[i] && S.grid[i] !== S.solution[i]) open.push(i);
+      if (!open.length) return;
+      t = open[rand(open.length)];
+    }
+    pushHistory();
+    S.grid[t] = S.solution[t];
+    S.notes[t] = 0;
+    clearPeerNotes(t, S.solution[t]);
+    S.hints++;
+    S.sel = t;
+    S.wrong.clear();
+    setStatus('Hint placed in row ' + (ROW(t) + 1) + ', column ' + (COL(t) + 1) + '.');
+    render();
+    checkWin();
+  }
+
+  function autoFill() {
+    if (S.busy || S.paused || S.over) return;
+    pushHistory();
+    const { rows, cols, boxes } = masksOf(S.grid);
+    for (let i = 0; i < 81; i++) {
+      if (!S.grid[i]) S.notes[i] = ALL & ~(rows[ROW(i)] | cols[COL(i)] | boxes[BOX(i)]);
+    }
+    S.wrong.clear();
+    setStatus('Pencil marks filled for every empty cell.');
+    render();
+  }
+
+  function check() {
+    if (S.busy || S.paused || S.over) return;
+    S.wrong.clear();
+    for (let i = 0; i < 81; i++) {
+      if (!S.given[i] && S.grid[i] && S.grid[i] !== S.solution[i]) S.wrong.add(i);
+    }
+    setStatus(S.wrong.size
+      ? plural(S.wrong.size, 'number is', 'numbers are') + ' incorrect and marked with a red border.'
+      : 'No incorrect numbers so far.');
+    render();
+  }
+
+  function checkWin() {
+    for (let i = 0; i < 81; i++) if (S.grid[i] !== S.solution[i]) return;
+    S.over = true;
+    stopTimer();
+    board.classList.add('solved');
+    render();
+    setStatus('Solved.');
+    const m = plural(S.mistakes, 'mistake', 'mistakes'), h = plural(S.hints, 'hint', 'hints');
+    openModal({
+      title: 'Solved',
+      body: LEVELS[S.level].label + ' puzzle finished in ' + fmt(S.seconds) + ', with ' + m + ' and ' + h + '.',
+      actions: [
+        { label: 'Close', onClick: closeModal },
+        { label: 'New game', primary: true, onClick: () => { closeModal(); newGame(S.level); } }
+      ],
+      onEscape: closeModal
+    });
+  }
+
+  function gameOver() {
+    S.over = true;
+    S.lost = true;
+    stopTimer();
+    render();
+    setStatus('Game over. The wrong number is marked with a red border.');
+    const lim = mistakeLimit();
+    openModal({
+      title: 'Game over',
+      body: lim === 1
+        ? 'That number was wrong, and this game ends after one mistake.'
+        : 'You reached the limit of ' + lim + ' wrong numbers after ' + fmt(S.seconds) + '.',
+      actions: [
+        { label: 'View board', onClick: closeModal },
+        { label: 'Retry puzzle', onClick: () => { closeModal(); restartPuzzle(); } },
+        { label: 'New game', primary: true, onClick: () => { closeModal(); newGame(S.level); } }
+      ],
+      onEscape: closeModal
+    });
+  }
+
+  function restartPuzzle(opts) {
+    stopTimer();
+    board.classList.remove('solved', 'paused');
+    gridEl.inert = false;
+    setVeil(false);
+    S.grid = S.given.map((g, i) => (g ? S.solution[i] : 0));
+    S.notes.fill(0);
+    S.history = [];
+    S.future = [];
+    S.mistakes = 0;
+    S.hints = 0;
+    S.seconds = 0;
+    S.over = false;
+    S.lost = false;
+    S.paused = false;
+    S.sel = -1;
+    S.stamp = 0;
+    S.wrong.clear();
+    S.ready = false;
+    setStatus('Puzzle reset. Good luck.');
+    render();
+    startTimer();
+    if (opts && opts.ready) enterReady();
+  }
+
+  /* ---------- Timer and pause ---------- */
+  function startTimer() {
+    stopTimer();
+    timerId = setInterval(() => {
+      if (!S.paused && !S.over && !S.busy && !dialogOpen()) { S.seconds++; renderMeta(); }
+    }, 1000);
+  }
+  function stopTimer() { if (timerId) { clearInterval(timerId); timerId = null; } }
+
+  function setVeil(on, title, sub, showResume, label) {
+    board.dataset.veil = on ? 'on' : 'off';
+    if (on) {
+      $('#veilTitle').textContent = title || '';
+      $('#veilSub').textContent = sub || '';
+      $('#resume').hidden = !showResume;
+      $('#resume').textContent = label || 'Resume';
+    }
+  }
+
+  function setPaused(p) {
+    if (S.over || S.busy) return;
+    S.paused = p;
+    S.ready = false;
+    board.classList.toggle('paused', p);
+    gridEl.inert = p;
+    setVeil(p, 'Paused', 'The board is hidden while the timer is stopped.', true, 'Resume');
+    if (p) $('#resume').focus();
+    renderMeta();
+  }
+
+  // Ready screen: the board stays hidden until every player taps Start.
+  function enterReady() {
+    if (S.over || S.busy) return;
+    S.paused = true;
+    S.ready = true;
+    board.classList.add('paused');
+    gridEl.inert = true;
+    setVeil(true, 'Ready?', 'Everyone starts together. Tap Start on the count of three.', true, 'Start');
+    $('#resume').focus();
+    renderMeta();
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && !S.paused && !S.over && !S.busy) setPaused(true);
+  });
+
+  /* ---------- New game ---------- */
+  const hasProgress = () => S.history.length > 0 && !S.over && !S.busy;
+
+  function requestNewGame(level) {
+    if (S.busy) return;
+    if (hasProgress()) {
+      openModal({
+        title: 'Start a new game?',
+        body: 'Your progress on this puzzle will be lost.',
+        actions: [
+          { label: 'Keep playing', onClick: closeModal },
+          { label: 'Start new game', primary: true, onClick: () => { closeModal(); newGame(level); } }
+        ],
+        onEscape: closeModal
+      });
+    } else {
+      newGame(level);
+    }
+  }
+
+  function newGame(level, seed, opts) {
+    stopTimer();
+    board.classList.remove('solved', 'paused');
+    gridEl.inert = false;
+    S = blank(level);
+    S.seed = seed == null ? randomSeed() : seed;
+    renderLevels();
+    setVeil(true, 'Building your puzzle', LEVELS[level].label + ' level', false);
+    setStatus('');
+    render();
+    setTimeout(() => {
+      const { puzzle, solution } = makePuzzle(level, S.seed);
+      S.grid = puzzle.slice();
+      S.given = puzzle.map((v) => v !== 0);
+      S.solution = solution;
+      S.busy = false;
+      setVeil(false);
+      setStatus(stampMode()
+        ? 'Pick a number on the pad, then tap cells to fill them.'
+        : 'Select a cell, then pick a number. Use Pencil to add small candidate marks.');
+      render();
+      startTimer();
+      if (opts && opts.ready) {
+        enterReady();
+        setStatus('Joined puzzle ' + groupCode(encodeCode(S.seed, S.level, readSettings())) + '. The shared settings are applied.');
+      }
+    }, 40);
+  }
+
+  /* ---------- Simple dialogs ---------- */
+  function openModal({ title, body, actions, onEscape }) {
+    closeModal();
+    const wrap = document.createElement('div');
+    wrap.className = 'modal';
+    wrap.innerHTML = '<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitle"><h2 id="dlgTitle"></h2><p></p><div class="dlg-actions"></div></div>';
+    wrap.querySelector('h2').textContent = title;
+    wrap.querySelector('p').textContent = body;
+    const box = wrap.querySelector('.dlg-actions');
+    let primaryBtn = null;
+    for (const a of actions) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn' + (a.primary ? ' primary' : '');
+      b.textContent = a.label;
+      b.addEventListener('click', a.onClick);
+      box.appendChild(b);
+      if (a.primary) primaryBtn = b;
+    }
+    document.body.appendChild(wrap);
+    modalEl = wrap;
+    modalOnEscape = onEscape || null;
+    (primaryBtn || box.firstChild).focus();
+  }
+
+  function closeModal() {
+    if (modalEl) { modalEl.remove(); modalEl = null; modalOnEscape = null; }
+  }
+
+  /* ---------- Guide content ---------- */
+  function figure(rows, cols, spec, caption) {
+    const fig = document.createElement('figure');
+    fig.className = 'fig';
+    const g = document.createElement('div');
+    g.className = 'dg';
+    g.style.setProperty('--cols', cols);
+    g.style.gridTemplateColumns = 'repeat(' + cols + ', 1fr)';
+    g.setAttribute('role', 'img');
+    g.setAttribute('aria-label', caption);
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const s = spec(r, c) || {};
+        const d = document.createElement('div');
+        d.className = 'dc' + (s.k ? ' ' + s.k : '')
+          + (c % 3 === 2 && c < cols - 1 ? ' br' : '')
+          + (r % 3 === 2 && r < rows - 1 ? ' bb' : '')
+          + (c === cols - 1 ? ' lc' : '')
+          + (r === rows - 1 ? ' lr' : '');
+        if (s.t) {
+          const t = document.createElement('span');
+          t.className = 'dt' + (s.mk ? ' mk' : '') + (s.sx ? ' sx' : '');
+          t.textContent = s.t;
+          d.appendChild(t);
+        }
+        if (s.n) {
+          const n = document.createElement('span');
+          n.className = 'dn';
+          for (let k = 1; k <= 9; k++) {
+            const i = document.createElement('i');
+            if (s.n.includes(k)) {
+              i.textContent = k;
+              const cls = [];
+              if (s.h && s.h.includes(k)) cls.push('h');
+              if (s.x && s.x.includes(k)) cls.push('x');
+              i.className = cls.join(' ');
+            }
+            n.appendChild(i);
+          }
+          d.appendChild(n);
+        }
+        g.appendChild(d);
+      }
+    }
+    const cap = document.createElement('figcaption');
+    cap.className = 'cap';
+    cap.textContent = caption;
+    fig.append(g, cap);
+    return fig;
+  }
+
+  const strip = (cells9, caption) => figure(1, 9, (r, c) => cells9[c], caption);
+  const lookup = (map, base) => (r, c) => map[r + ',' + c] || (base ? base(r, c) : null);
+  const mark = (extra) => Object.assign({ t: '', mk: true }, extra);
+
+  const TECHS = [
+    {
+      id: 'last-digit', name: 'Last digit in a unit', tag: 'Beginner',
+      when: 'A row, column, or box has only one empty cell left.',
+      steps: [
+        'Find a row, column, or box with eight digits filled in.',
+        'Work out which digit from 1 to 9 is missing.',
+        'Write that digit in the empty cell.'
+      ],
+      figs: () => [
+        strip(
+          [{ t: '5' }, { t: '3' }, { t: '4', k: 'g' }, { t: '6' }, { t: '7' }, { t: '8' }, { t: '9' }, { t: '1' }, { t: '2' }],
+          'The row holds 5, 3, 6, 7, 8, 9, 1, and 2. Only 4 is missing, so it goes in the green cell.'
+        )
+      ],
+      tip: "Scan for nearly full units first. They're the quickest wins on any board."
+    },
+    {
+      id: 'naked-single', name: 'Naked single', tag: 'Easy',
+      when: 'An empty cell sees eight different digits across its row, column, and box, so only one digit is left.',
+      steps: [
+        'Pick an empty cell.',
+        'List the digits already in its row, column, and box.',
+        'If eight different digits appear, the ninth is the answer.'
+      ],
+      figs: () => {
+        const given = { '4,0': '1', '4,8': '2', '0,4': '3', '8,4': '4', '2,4': '5', '3,3': '6', '5,3': '7', '3,5': '8' };
+        const inLine = (r, c) => r === 4 || c === 4 || (r >= 3 && r <= 5 && c >= 3 && c <= 5);
+        return [figure(9, 9, (r, c) => {
+          if (r === 4 && c === 4) return { t: '9', k: 'g' };
+          const key = r + ',' + c;
+          if (given[key]) return { t: given[key], k: 'ln' };
+          return inLine(r, c) ? { k: 'ln' } : null;
+        }, 'The shaded row, column, and box around the center cell hold 1 through 8 between them. Only 9 fits, so it goes in the green cell.')];
+      },
+      tip: 'With pencil marks on, a cell with a single mark left is a naked single.'
+    },
+    {
+      id: 'hidden-single', name: 'Hidden single', tag: 'Medium',
+      when: 'A digit has only one cell left in a row, column, or box, even if that cell could also hold other digits.',
+      steps: [
+        'Pick a digit and a unit. Boxes are the easiest place to start.',
+        'Rule out every cell in the unit that is already filled or that shares a row or column with the same digit.',
+        'If one cell is left, place the digit there.'
+      ],
+      figs: () => {
+        const fives = { '3,0': 1, '4,8': 1, '0,3': 1, '7,4': 1 };
+        const f1 = figure(9, 9, (r, c) => {
+          if (r === 5 && c === 5) return { t: '5', k: 'g' };
+          if (fives[r + ',' + c]) return { t: '5', k: 'a' };
+          return (r === 3 || r === 4 || c === 3 || c === 4) ? { k: 'ln' } : null;
+        }, 'Scanning a box: the four 5s block rows 4 and 5 and columns 4 and 5 of the center box (shaded). Only the green cell is left for a 5.');
+        const f2 = strip([
+          { t: '5' },
+          { n: [1, 4] },
+          { t: '7' },
+          { n: [1, 3, 4], h: [3], x: [1, 4], k: 'a' },
+          { t: '2' },
+          { n: [4, 8] },
+          { t: '9' },
+          { n: [1, 8] },
+          { t: '6' }
+        ], 'Scanning a row with pencil marks: 3 is a candidate in only one cell of the row, so that cell must be 3, even though it also lists 1 and 4.');
+        return [f1, f2];
+      },
+      tip: 'Work through one digit at a time across all nine boxes, then move on to the next digit.'
+    },
+    {
+      id: 'naked-pair', name: 'Naked pair', tag: 'Hard',
+      when: 'Two cells in the same row, column, or box hold exactly the same two candidates.',
+      steps: [
+        'Find two cells in one unit that each have only the same two pencil marks.',
+        'Those two digits must fill those two cells, in one order or the other.',
+        'Remove both digits from every other cell in the unit.'
+      ],
+      figs: () => [strip([
+        { t: '8' },
+        { n: [2, 5], h: [2, 5], k: 'a' },
+        { n: [2, 5], h: [2, 5], k: 'a' },
+        { t: '1' },
+        { n: [2, 4, 5, 7], x: [2, 5], k: 'e' },
+        { n: [4, 5, 9], x: [5], k: 'e' },
+        { t: '3' },
+        { n: [2, 7, 9], x: [2], k: 'e' },
+        { t: '6' }
+      ], 'Cells 2 and 3 both hold only 2 and 5. The struck-through candidates can go, leaving 4 and 7 in cell 5, 4 and 9 in cell 6, and 7 and 9 in cell 8.')],
+      tip: 'Naked pairs also come as triples and quads. The idea is the same with more cells.'
+    },
+    {
+      id: 'pointing', name: 'Pointing pair or triple', tag: 'Hard',
+      when: 'Inside one box, every remaining spot for a digit lies in a single row or column.',
+      steps: [
+        'Pick a box and a digit.',
+        "If all of that digit's candidates in the box line up in one row or column, the digit must go somewhere on that line inside the box.",
+        'Remove the digit from the rest of that row or column outside the box.'
+      ],
+      figs: () => {
+        const m = {
+          '0,1': mark({ t: '4', k: 'a' }), '0,2': mark({ t: '4', k: 'a' }),
+          '1,1': { t: '2' }, '1,2': { t: '8' }, '2,1': { t: '6' }, '2,2': { t: '1' },
+          '0,4': mark({ t: '4', sx: true, k: 'e' }), '0,7': mark({ t: '4', sx: true, k: 'e' }),
+          '1,5': mark({ t: '4' }), '2,7': mark({ t: '4' })
+        };
+        return [figure(3, 9, lookup(m, (r, c) => (c === 0 ? { k: 'ln' } : null)),
+          'Column 1 already has a 4 lower down (shaded), and the other cells in the box are filled. That leaves two spots for 4 in the box, both in the top row. So 4 cannot go anywhere else in that row, and the struck-through 4s are removed.')];
+      },
+      tip: 'Small 4s mark where a 4 could still go. Cells with no mark cannot hold a 4.'
+    },
+    {
+      id: 'box-line', name: 'Box and line reduction', tag: 'Hard',
+      when: 'In one row or column, every remaining spot for a digit lies inside a single box.',
+      steps: [
+        'Pick a row or column and a digit.',
+        "If all of that digit's candidates in the line sit inside one box, the digit must come from that box.",
+        'Remove the digit from the other cells of that box.'
+      ],
+      figs: () => {
+        const m = {
+          '0,0': mark({ t: '6', k: 'a' }), '0,1': { t: '9' }, '0,2': mark({ t: '6', k: 'a' }),
+          '0,3': { t: '1' }, '0,4': { t: '2' }, '0,5': { t: '3' }, '0,6': { t: '4' }, '0,7': { t: '5' }, '0,8': { t: '7' },
+          '1,0': { t: '1' }, '1,1': mark({ t: '6', sx: true, k: 'e' }), '1,2': { t: '3' },
+          '2,0': mark({ t: '6', sx: true, k: 'e' }), '2,1': { t: '2' }, '2,2': { t: '4' }
+        };
+        return [figure(3, 9, lookup(m),
+          'In the top row, only the two cells in the first box can still hold a 6. The 6 for this row must be in that box, so the struck-through 6s in the rest of the box can go.')];
+      },
+      tip: 'This is the mirror image of a pointing pair: the line points into the box instead of the box pointing out.'
+    },
+    {
+      id: 'hidden-pair', name: 'Hidden pair', tag: 'Hard',
+      when: 'Two digits can only go in the same two cells of a unit, even though those cells have other candidates too.',
+      steps: [
+        'Pick a unit and look at where each digit can still go.',
+        'Find two digits that are each limited to the same two cells.',
+        'Those cells must hold those digits, so delete every other candidate from them.'
+      ],
+      figs: () => [strip([
+        { t: '1' }, { t: '2' }, { t: '3' },
+        { n: [4, 6, 7, 8], h: [7, 8], x: [4, 6], k: 'a' },
+        { n: [4, 5, 6] },
+        { n: [4, 5, 6, 9] },
+        { n: [5, 6, 9] },
+        { n: [4, 5, 7, 8, 9], h: [7, 8], x: [4, 5, 9], k: 'a' },
+        { n: [4, 5, 9] }
+      ], 'The digits 7 and 8 appear only in cells 4 and 8 of the row. Those two cells must hold 7 and 8, so the struck-through candidates are removed and each cell keeps just 7 and 8.')],
+      tip: 'Hidden pairs are the reverse of naked pairs. Look for digits, not cells.'
+    },
+    {
+      id: 'naked-triple', name: 'Naked triple', tag: 'Hard',
+      when: 'Three cells in a unit use candidates from only the same three digits. Each cell does not need all three.',
+      steps: [
+        'Find three cells in one unit whose candidates, combined, are only three different digits.',
+        'Those digits must fill those three cells.',
+        'Remove all three digits from every other cell in the unit.'
+      ],
+      figs: () => [strip([
+        { t: '2' },
+        { n: [1, 4], h: [1, 4], k: 'a' },
+        { t: '3' },
+        { n: [4, 7], h: [4, 7], k: 'a' },
+        { t: '5' },
+        { n: [1, 7], h: [1, 7], k: 'a' },
+        { t: '6' },
+        { n: [1, 4, 8, 9], x: [1, 4], k: 'e' },
+        { n: [7, 8, 9], x: [7], k: 'e' }
+      ], 'Cells 2, 4, and 6 draw only from 1, 4, and 7. The struck-through candidates in cells 8 and 9 can go, leaving 8 and 9 in both.')],
+      tip: 'If three cells share three digits, the leftover cells in that unit cannot use them.'
+    },
+    {
+      id: 'x-wing', name: 'X-Wing', tag: 'Expert',
+      when: 'A digit has exactly two spots in each of two rows, and both rows use the same two columns. The same works with rows and columns swapped.',
+      steps: [
+        'Pick a digit and find two rows where it has exactly two candidates each.',
+        'Check that those candidates sit in the same two columns, forming a rectangle.',
+        'The digit takes opposite corners of the rectangle, so remove it from every other cell in those two columns.'
+      ],
+      figs: () => {
+        const m = {};
+        [[1, 2], [1, 6], [5, 2], [5, 6]].forEach(([r, c]) => { m[r + ',' + c] = mark({ t: '7', k: 'a' }); });
+        [[0, 2], [3, 6], [7, 2]].forEach(([r, c]) => { m[r + ',' + c] = mark({ t: '7', sx: true, k: 'e' }); });
+        [[3, 0], [4, 4], [8, 8]].forEach(([r, c]) => { m[r + ',' + c] = mark({ t: '7' }); });
+        return [figure(9, 9, lookup(m, (r, c) => ((r === 1 || r === 5 || c === 2 || c === 6) ? { k: 'ln' } : null)),
+          'The digit 7 has exactly two spots in rows 2 and 6, and both rows use columns 3 and 7. The 7s must sit on opposite corners of that rectangle, so every other 7 in columns 3 and 7 (struck through) is removed.')];
+      },
+      tip: 'Small digits show where a 7 could still go. The shaded lines are the rows and columns that form the wing.'
+    },
+    {
+      id: 'xy-wing', name: 'XY-Wing', tag: 'Expert',
+      when: 'Three cells each have exactly two candidates: a pivot with A and B, and two pincers with A and C and with B and C. Each pincer must share a row, column, or box with the pivot.',
+      steps: [
+        'Find the pivot, then the two pincers that each see it.',
+        'Whatever the pivot becomes, one of the pincers must be C.',
+        'Remove C from any cell that sees both pincers.'
+      ],
+      figs: () => {
+        const m = {
+          '4,4': { n: [2, 5], h: [2, 5], k: 'a' },
+          '4,8': { n: [2, 6], k: 'b' },
+          '0,4': { n: [5, 6], k: 'b' },
+          '0,8': { n: [3, 6], x: [6], k: 'e' }
+        };
+        return [figure(9, 9, lookup(m),
+          'The pivot (blue) holds 2 and 5. One pincer holds 2 and 6 and shares its row, the other holds 5 and 6 and shares its column. Whichever digit the pivot takes, one pincer becomes 6, so the red cell, which sees both pincers, cannot be 6.')];
+      },
+      tip: 'Only the four cells in the pattern are drawn here. Every other cell is left blank.'
+    },
+    {
+      id: 'swordfish', name: 'Swordfish', tag: 'Expert',
+      when: "A digit's candidates in three rows all fall within the same three columns. The same works with rows and columns swapped.",
+      steps: [
+        'Pick a digit and find three rows where its candidates use only the same three columns.',
+        'The digit must land once in each of those rows and once in each of those columns.',
+        'Remove it from every other cell in those three columns.'
+      ],
+      figs: () => {
+        const m = {};
+        [[0, 1], [0, 4], [3, 4], [3, 8], [7, 1], [7, 8]].forEach(([r, c]) => { m[r + ',' + c] = mark({ t: '5', k: 'a' }); });
+        [[2, 1], [5, 4], [6, 8]].forEach(([r, c]) => { m[r + ',' + c] = mark({ t: '5', sx: true, k: 'e' }); });
+        [[4, 0], [8, 6]].forEach(([r, c]) => { m[r + ',' + c] = mark({ t: '5' }); });
+        const rowsHit = [0, 3, 7], colsHit = [1, 4, 8];
+        return [figure(9, 9, lookup(m, (r, c) => ((rowsHit.includes(r) || colsHit.includes(c)) ? { k: 'ln' } : null)),
+          'The digit 5 is limited to columns 2, 5, and 9 in each of rows 1, 4, and 8. Those three rows must use those three columns between them, so every other 5 in those columns (struck through) is removed.')];
+      },
+      tip: 'A Swordfish is an X-Wing stretched over three rows. Each row may have two or three candidates.'
+    },
+    {
+      id: 'chains', name: 'Chains and last resort', tag: 'Expert',
+      when: 'Every technique above has run out.',
+      steps: [
+        'Pick a cell with only two candidates.',
+        'Follow what happens if you place the first one, then what happens if you place the second.',
+        'If both choices force the same result somewhere, that result is certain. If one choice breaks a rule, the other choice is correct.'
+      ],
+      figs: () => [],
+      tip: 'Hard and Expert puzzles may need this. Use Undo freely while you test a choice, or ask for a Hint.'
+    }
+  ];
+
+  let guideBuilt = false;
+  function buildGuide() {
+    if (guideBuilt) return;
+    guideBuilt = true;
+    const body = $('#guideBody');
+
+    const intro = document.createElement('p');
+    intro.className = 'intro';
+    intro.innerHTML = 'Techniques run from easiest to hardest. When you are stuck, work down the list, and start again from the top each time you place a number. '
+      + 'From naked pairs onward you need pencil marks, so use <strong>Fill marks</strong> to add them. '
+      + 'The tags match this app: Easy puzzles need only naked singles, Medium adds hidden singles, and Hard and Expert need techniques beyond singles.';
+    body.appendChild(intro);
+
+    const legend = document.createElement('ul');
+    legend.className = 'legend';
+    const items = [
+      ['The pattern', 'background:var(--same);box-shadow:inset 0 0 0 2px var(--accent)'],
+      ['Supporting cells', 'background:var(--panel);box-shadow:inset 0 0 0 2px var(--muted)'],
+      ['The answer', 'background:var(--ok-bg);box-shadow:inset 0 0 0 2px var(--ok)'],
+      ['Candidates removed', 'background:var(--err-bg)'],
+      ['Cells that see the digit', 'background:var(--peer);box-shadow:inset 0 0 0 1px var(--line)']
+    ];
+    items.forEach(([label, css]) => {
+      const li = document.createElement('li');
+      const sw = document.createElement('span');
+      sw.className = 'sw';
+      sw.style.cssText = css;
+      li.append(sw, label);
+      legend.appendChild(li);
+    });
+    body.appendChild(legend);
+
+    const toc = document.createElement('nav');
+    toc.className = 'toc';
+    toc.setAttribute('aria-label', 'Techniques');
+    TECHS.forEach((t) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = t.name;
+      b.addEventListener('click', () => {
+        document.getElementById('tech-' + t.id).scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      toc.appendChild(b);
+    });
+    body.appendChild(toc);
+
+    TECHS.forEach((t) => {
+      const sec = document.createElement('article');
+      sec.className = 'tech';
+      sec.id = 'tech-' + t.id;
+
+      const head = document.createElement('header');
+      const h = document.createElement('h3');
+      h.textContent = t.name;
+      const tag = document.createElement('span');
+      tag.className = 'tag';
+      tag.textContent = t.tag;
+      head.append(h, tag);
+      sec.appendChild(head);
+
+      const when = document.createElement('p');
+      when.className = 'when';
+      const strong = document.createElement('strong');
+      strong.textContent = 'Use it when: ';
+      when.append(strong, t.when);
+      sec.appendChild(when);
+
+      const ol = document.createElement('ol');
+      t.steps.forEach((s) => {
+        const li = document.createElement('li');
+        li.textContent = s;
+        ol.appendChild(li);
+      });
+      sec.appendChild(ol);
+
+      t.figs().forEach((f) => sec.appendChild(f));
+
+      const tip = document.createElement('p');
+      tip.className = 'tip';
+      tip.textContent = t.tip;
+      sec.appendChild(tip);
+
+      body.appendChild(sec);
+    });
+  }
+
+  /* ---------- Events ---------- */
+  gridEl.addEventListener('click', (e) => {
+    const b = e.target.closest('.cell');
+    if (b) cellClick(+b.dataset.i);
+  });
+
+  padEl.addEventListener('click', (e) => {
+    const b = e.target.closest('.padbtn');
+    if (!b) return;
+    const v = +b.dataset.v;
+    if (stampMode()) pickNumber(v); else enter(v, false);
+  });
+
+  document.querySelectorAll('#levels button').forEach((b) => {
+    b.addEventListener('click', () => {
+      if (b.dataset.level !== S.level) requestNewGame(b.dataset.level);
+    });
+  });
+
+  $('#undo').addEventListener('click', undo);
+  $('#redo').addEventListener('click', redo);
+  $('#erase').addEventListener('click', erase);
+  $('#pencil').addEventListener('click', togglePencil);
+  $('#hint').addEventListener('click', hint);
+  $('#autofill').addEventListener('click', autoFill);
+  $('#check').addEventListener('click', check);
+  $('#newGame').addEventListener('click', () => requestNewGame(S.level));
+  $('#pause').addEventListener('click', () => setPaused(!S.paused));
+  $('#resume').addEventListener('click', () => setPaused(false));
+
+  // Settings
+  ['#optConflicts', '#optPeers', '#optMatches', '#optCounts', '#optLimit'].forEach((id) => {
+    $(id).addEventListener('change', render);
+  });
+
+  $('#optStamp').addEventListener('change', () => {
+    S.stamp = 0;
+    setStatus(stampMode()
+      ? 'Number-first entry on. Pick a number on the pad, then tap cells to fill them.'
+      : 'Number-first entry off. Select a cell, then pick a number.');
+    render();
+  });
+
+  function applyTheme(theme) {
+    const root = document.documentElement;
+    if (theme === 'system') root.removeAttribute('data-theme');
+    else root.setAttribute('data-theme', theme);
+    document.querySelectorAll('#themes button').forEach((b) => {
+      b.setAttribute('aria-checked', String(b.dataset.theme === theme));
+    });
+  }
+
+  document.querySelectorAll('#themes button').forEach((b) => {
+    b.addEventListener('click', () => applyTheme(b.dataset.theme));
+  });
+
+  // Play together
+  const togetherDlg = $('#together');
+  const joinInput = $('#joinCode'), joinBtn = $('#joinBtn'), joinMsg = $('#joinMsg'), joinInfo = $('#joinInfo');
+  let joinParsed = null;
+
+  function fillList(el, items) {
+    el.textContent = '';
+    items.forEach((t) => { const li = document.createElement('li'); li.textContent = t; el.appendChild(li); });
+  }
+
+  function openTogether() {
+    if (S.busy) return;
+    const code = groupCode(encodeCode(S.seed, S.level, readSettings()));
+    $('#myCode').textContent = code;
+    fillList($('#myCodeInfo'), describeSettings(S.level, readSettings()));
+    $('#copyMsg').textContent = '';
+    joinInput.value = '';
+    updateJoin();
+    togetherDlg.showModal();
+  }
+
+  function updateJoin() {
+    const digits = joinInput.value.replace(/\D/g, '').slice(0, 10);
+    const grouped = digits.length > 6 ? groupCode(digits) : (digits.length > 3 ? digits.slice(0, 3) + ' ' + digits.slice(3) : digits);
+    if (joinInput.value !== grouped) joinInput.value = grouped;
+    joinParsed = null;
+    joinInfo.textContent = '';
+    joinMsg.className = 'hint';
+    if (digits.length < 10) {
+      joinMsg.textContent = digits.length ? (10 - digits.length) + ' more ' + (10 - digits.length === 1 ? 'digit' : 'digits') + ' to go.' : 'Spaces and dashes are fine.';
+    } else {
+      joinParsed = decodeCode(digits);
+      if (joinParsed) {
+        joinMsg.className = 'hint ok';
+        joinMsg.textContent = 'Code accepted. Starting applies these game settings:';
+        fillList(joinInfo, describeSettings(joinParsed.level, joinParsed.settings));
+      } else {
+        joinMsg.className = 'hint err';
+        joinMsg.textContent = "That code doesn't check out. A digit may be wrong or swapped, so ask for it again.";
+      }
+    }
+    joinBtn.disabled = !joinParsed;
+  }
+
+  function startShared(parsed) {
+    applySettings(parsed.settings);
+    newGame(parsed.level, parsed.seed, { ready: true });
+  }
+
+  joinInput.addEventListener('input', updateJoin);
+  joinInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && joinParsed) { e.preventDefault(); joinBtn.click(); } });
+
+  joinBtn.addEventListener('click', () => {
+    if (!joinParsed) return;
+    const parsed = joinParsed;
+    togetherDlg.close();
+    if (hasProgress()) {
+      openModal({
+        title: 'Join this puzzle?',
+        body: 'Your progress on the current puzzle will be lost.',
+        actions: [
+          { label: 'Keep playing', onClick: closeModal },
+          { label: 'Join puzzle', primary: true, onClick: () => { closeModal(); startShared(parsed); } }
+        ],
+        onEscape: closeModal
+      });
+    } else {
+      startShared(parsed);
+    }
+  });
+
+  $('#copyCode').addEventListener('click', async () => {
+    const text = $('#myCode').textContent;
+    try {
+      await navigator.clipboard.writeText(text);
+      $('#copyMsg').textContent = 'Code copied.';
+    } catch (err) {
+      $('#copyMsg').textContent = "Copying isn't available here. Read the code aloud instead.";
+    }
+  });
+
+  $('#readyRestart').addEventListener('click', () => {
+    togetherDlg.close();
+    if (hasProgress()) {
+      openModal({
+        title: 'Restart this puzzle?',
+        body: 'Your progress will be lost. The puzzle restarts on a ready screen so everyone can start together.',
+        actions: [
+          { label: 'Keep playing', onClick: closeModal },
+          { label: 'Restart', primary: true, onClick: () => { closeModal(); restartPuzzle({ ready: true }); } }
+        ],
+        onEscape: closeModal
+      });
+    } else {
+      restartPuzzle({ ready: true });
+    }
+  });
+
+  $('#togetherBtn').addEventListener('click', openTogether);
+
+  // Dialog sheets
+  const settingsDlg = $('#settings'), guideDlg = $('#guide');
+  [settingsDlg, guideDlg, togetherDlg].forEach((dlg) => {
+    dlg.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => dlg.close()));
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+  });
+  $('#settingsBtn').addEventListener('click', () => settingsDlg.showModal());
+  $('#guideBtn').addEventListener('click', () => { buildGuide(); guideDlg.showModal(); });
+
+  document.addEventListener('keydown', (e) => {
+    if (dialogOpen()) return;
+    if (modalEl) {
+      if (e.key === 'Escape' && modalOnEscape) { e.preventDefault(); modalOnEscape(); }
+      return;
+    }
+
+    const mod = e.ctrlKey || e.metaKey;
+    const key = e.key.toLowerCase();
+
+    if (mod && key === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+    if (mod && key === 'y') { e.preventDefault(); redo(); return; }
+    if (mod || e.altKey) return;
+
+    const m = /^(?:Digit|Numpad)([1-9])$/.exec(e.code);
+    if (m) {
+      e.preventDefault();
+      if (stampMode()) pickNumber(+m[1]); else enter(+m[1], e.shiftKey);
+      return;
+    }
+
+    if (e.key === 'Escape' && S.stamp) { S.stamp = 0; setStatus('Number deselected.'); render(); return; }
+
+    if (e.key === 'Backspace' || e.key === 'Delete' || e.code === 'Digit0' || e.code === 'Numpad0') {
+      e.preventDefault(); erase(); return;
+    }
+
+    const moves = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
+    if (moves[e.key]) {
+      e.preventDefault();
+      if (S.busy || S.paused) return;
+      if (S.sel < 0) { S.sel = 40; }
+      else {
+        const [dr, dc] = moves[e.key];
+        const r = Math.min(8, Math.max(0, ROW(S.sel) + dr));
+        const c = Math.min(8, Math.max(0, COL(S.sel) + dc));
+        S.sel = r * 9 + c;
+      }
+      render();
+      cells[S.sel].focus();
+      return;
+    }
+
+    if (e.target instanceof HTMLButtonElement && (e.key === ' ' || e.key === 'Enter')) return;
+
+    if (key === 'n') { togglePencil(); return; }
+    if (key === 'h') { hint(); return; }
+    if (key === 'p') { setPaused(!S.paused); return; }
+  });
+
+  /* ---------- Start ---------- */
+  renderLevels();
+  newGame('easy');
+})();
+</script>
+</body>
+</html>
