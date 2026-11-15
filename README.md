@@ -2,7 +2,7 @@
 
 A single-file Sudoku game with four difficulty levels, pencil marks, a built-in solving guide, and short codes that let friends solve the same puzzle at the same time. It runs in any modern browser on phones, tablets, and computers, with no account, install, or tracking.
 
-## Features and benefits
+## Features
 
 **Four difficulty levels.** Every puzzle is generated fresh and has exactly one solution. Levels are graded by the techniques they need: Easy needs only naked singles, Medium adds hidden singles, and Hard and Expert need techniques beyond singles. You can step up at your own pace.
 
@@ -64,14 +64,9 @@ A single-file Sudoku game with four difficulty levels, pencil marks, a built-in 
 
 The code carries the puzzle, the level, the game over limit, remaining counts on or off, the three highlight options, and automatic pencil mark removal. Theme and number-first entry stay personal on each device.
 
-## Host your own copy on GitHub Pages
+## Hosted on GitHub Pages
 
-Opening the file directly on an iPhone or iPad won't work, because the Files app preview doesn't run JavaScript. Hosting it as a web page fixes that and gives everyone the same link.
-
-1. Name the game file `index.html`.
-2. Create a public repository and upload `index.html` to the top level.
-3. Go to **Settings**, then **Pages**. Set Source to **Deploy from a branch**, choose **main** and **/ (root)**, then save.
-4. After a minute or two, your game is live at `https://yourusername.github.io/reponame/`.
+Hosting it as a web page allows access from a phone.
 
 On a phone, use Share, then **Add to Home Screen** for an app-style icon.
 
